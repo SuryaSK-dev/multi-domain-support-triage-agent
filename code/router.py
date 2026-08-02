@@ -6,6 +6,12 @@ from code.retriever import Retriever
 
 CONFIDENCE_ESCALATE_THRESHOLD = 0.3
 
+# Only these are escalated NO MATTER what the corpus says — they inherently
+# require human judgment, not information lookup (self-harm needs a person,
+# not an article; adversarial input can't be trusted; a disputed integrity
+# finding needs case-by-case human review).
+ALWAYS_ESCALATE_CATEGORIES = {"self_harm_or_crisis", "adversarial_content", "assessment_integrity"}
+
 @dataclass
 class RoutingDecision:
     status: Status
@@ -13,19 +19,17 @@ class RoutingDecision:
 
 
 def route(issue_text: str, classification: ClassificationResult, retriever: Retriever) -> RoutingDecision:
-    # 1. Hard rule gate — fraud, PII, self-harm, adversarial content, assessment integrity
+    # 1. Absolute hard gate — no grounding check can override these
     force, risk_categories = should_force_escalate(issue_text)
-    if force:
+    always_hit = [c for c in risk_categories if c in ALWAYS_ESCALATE_CATEGORIES]
+    if always_hit:
         return RoutingDecision(
             status=Status.ESCALATED,
-            reason=f"Escalated due to detected risk categories: {', '.join(risk_categories)}."
+            reason=f"Escalated due to categories requiring human judgment: {', '.join(always_hit)}."
         )
 
     # 2. Out-of-scope handling
     if classification.product_area.value == "out-of-scope":
-        # Urgent outages get escalated even with zero security risk flags —
-        # the corpus has no live-status info, and "site is down" needs a human now,
-        # not a generic out-of-scope notice.
         if is_urgent_outage(issue_text):
             return RoutingDecision(
                 status=Status.ESCALATED,
@@ -45,7 +49,9 @@ def route(issue_text: str, classification: ClassificationResult, retriever: Retr
             reason="Ticket is out of scope AND carries risk signals; escalating rather than guessing."
         )
 
-    # 3. Retrieval confidence check — can we actually ground an answer?
+    # 3. Grounding check — this is now the primary decision driver for
+    # sensitive-sounding tickets (fraud, PII, billing, account access):
+    # if the corpus has a real documented process, use it; if not, escalate.
     company = classification.company.value
     company = None if company == "none" else company
     results = retriever.search(issue_text, company=company, k=5)
@@ -58,13 +64,13 @@ def route(issue_text: str, classification: ClassificationResult, retriever: Retr
                    f"answer in the support corpus; escalating instead of guessing."
         )
 
-    # 4. Soft risk flags without hard escalate — still repliable if grounding is strong
-    if classification.risk_flags:
+    if classification.risk_flags or (risk_categories and not always_hit):
+        flags_str = ", ".join(set(classification.risk_flags) | set(risk_categories))
         return RoutingDecision(
             status=Status.REPLIED,
-            reason=f"Ticket has soft risk signals ({', '.join(classification.risk_flags)}) "
-                   f"but strong corpus grounding (confidence {confidence:.3f}); replying "
-                   f"with documented process rather than escalating."
+            reason=f"Ticket has sensitive signals ({flags_str}) but the support corpus "
+                   f"contains a documented process for it (confidence {confidence:.3f}); "
+                   f"replying with that documented process rather than escalating."
         )
 
     return RoutingDecision(
