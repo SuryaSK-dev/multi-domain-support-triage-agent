@@ -38,6 +38,17 @@ RISK_PATTERNS: dict[str, list[str]] = {
     ],
 }
 
+URGENCY_PATTERNS = [
+    r"\bsite is down\b", r"\bcompletely (down|broken|inaccessible)\b",
+    r"\bnone of.*(work|accessible|loading)\b", r"\bentire (system|platform|site) down\b",
+    r"\ball (pages|features) (down|broken|inaccessible)\b",
+    r"\burgent\b.*\b(down|broken|not working)\b",
+]
+
+def is_urgent_outage(text: str) -> bool:
+    text_lower = text.lower()
+    return any(re.search(p, text_lower) for p in URGENCY_PATTERNS)
+
 def assess_risk(text: str) -> list[str]:
     text_lower = text.lower()
     triggered = []

@@ -1,11 +1,14 @@
 import os
+import time
 from google import genai
 from google.genai import types
 from dotenv import load_dotenv
 
-from code.retriever import Retriever, Chunk
+from code.retriever import Retriever
 from code.router import RoutingDecision
 from code.schemas import Status, ClassificationResult
+from code.cache import cache_get, cache_set
+from code.rate_limiter import throttle
 
 load_dotenv()
 client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
@@ -19,6 +22,10 @@ STRICT RULES:
   step isn't covered in available documentation rather than guessing.
 - Never state a policy, refund amount, deadline, or process step that isn't
   explicitly present in the excerpts.
+- IMPORTANT: if the user's specific question is not directly answered by the
+  excerpts (even if the excerpts are topically related), you MUST explicitly
+  say the documentation doesn't cover that specific point, rather than
+  answering with adjacent facts that could be mistaken for a direct answer.
 - Keep the tone helpful, concise, and professional — 2-4 sentences typically.
 - Do not mention "excerpts", "documents", or internal reasoning to the user;
   write as a normal support reply.
@@ -39,11 +46,26 @@ ESCALATION_MESSAGE_TEMPLATES = {
                "automated response. We've flagged it and someone will follow up.",
 }
 
+
 def _escalation_message(risk_categories: list[str]) -> str:
     for cat in risk_categories:
         if cat in ESCALATION_MESSAGE_TEMPLATES:
             return ESCALATION_MESSAGE_TEMPLATES[cat]
     return ESCALATION_MESSAGE_TEMPLATES["default"]
+
+
+def _call_with_retry(fn, max_retries: int = 3):
+    for attempt in range(max_retries):
+        try:
+            return fn()
+        except Exception as e:
+            if "RESOURCE_EXHAUSTED" in str(e) and attempt < max_retries - 1:
+                wait = 40 * (attempt + 1)
+                print(f"Rate limited, waiting {wait}s before retry...")
+                time.sleep(wait)
+            else:
+                raise
+
 
 def generate_response(
     issue_text: str,
@@ -52,19 +74,20 @@ def generate_response(
     retriever: Retriever,
 ) -> str:
     if decision.status == Status.ESCALATED:
-        # Escalated tickets get a handoff message, not an attempted answer.
-        # Pull risk category names out of the reason string for template matching.
         for cat in ["fraud_or_security", "pii_or_legal", "self_harm_or_crisis",
                     "adversarial_content", "assessment_integrity"]:
             if cat in decision.reason:
                 return _escalation_message([cat])
         return _escalation_message([])
 
-    # Reply path — ground the answer in retrieved chunks only
     company = classification.company.value
     company = None if company == "none" else company
-    results = retriever.search(issue_text, company=company, k=4)
 
+    cached = cache_get("respond", issue_text, company or "none")
+    if cached:
+        return cached
+
+    results = retriever.search(issue_text, company=company, k=4)
     if not results:
         return ESCALATION_MESSAGE_TEMPLATES["default"]
 
@@ -72,15 +95,17 @@ def generate_response(
         f"[Source: {chunk.title}]\n{chunk.text[:800]}"
         for chunk, score in results
     )
-
     prompt = f"User's issue: {issue_text}\n\nRelevant support excerpts:\n{excerpts}"
 
-    response = client.models.generate_content(
+    throttle()
+    response = _call_with_retry(lambda: client.models.generate_content(
         model="gemini-2.5-flash",
         contents=prompt,
         config=types.GenerateContentConfig(
             system_instruction=RESPONSE_SYSTEM_INSTRUCTION,
             temperature=0,
         ),
-    )
-    return response.text.strip()
+    ))
+    result_text = response.text.strip()
+    cache_set("respond", issue_text, company or "none", value=result_text)
+    return result_text
