@@ -1,9 +1,5 @@
 import re
 
-# Each category maps to keyword/phrase patterns. Matching ANY pattern in a
-# category force-escalates the ticket, regardless of what the classifier LLM decided.
-# Kept as raw strings (not LLM-judged) so behavior is auditable and reproducible.
-
 RISK_PATTERNS: dict[str, list[str]] = {
     "fraud_or_security": [
         r"\bfraud\b", r"\bunauthorized (charge|transaction|access|login)\b",
@@ -43,7 +39,6 @@ RISK_PATTERNS: dict[str, list[str]] = {
 }
 
 def assess_risk(text: str) -> list[str]:
-    """Returns list of triggered risk category names. Empty list = no hard trigger."""
     text_lower = text.lower()
     triggered = []
     for category, patterns in RISK_PATTERNS.items():
@@ -54,7 +49,6 @@ def assess_risk(text: str) -> list[str]:
     return triggered
 
 def should_force_escalate(text: str) -> tuple[bool, list[str]]:
-    """Hard gate: certain categories ALWAYS escalate, no LLM override."""
     flags = assess_risk(text)
     hard_escalate_categories = {
         "fraud_or_security", "pii_or_legal", "self_harm_or_crisis",

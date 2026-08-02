@@ -26,7 +26,6 @@ Classify the ticket below. Rules:
 
 def classify_ticket(issue: str, subject: str, company: str) -> ClassificationResult:
     prompt = f"Company (as given): {company}\nSubject: {subject}\nIssue: {issue}"
-
     response = client.models.generate_content(
         model="gemini-2.5-flash",
         contents=prompt,

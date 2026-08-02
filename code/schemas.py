@@ -26,6 +26,7 @@ class ProductArea(str, Enum):
     CLAUDE_PRO_AND_MAX_PLANS = "claude_pro-and-max-plans"
     CLAUDE_SAFEGUARDS = "claude_safeguards"
     CLAUDE_TEAM_AND_ENTERPRISE = "claude_team-and-enterprise-plans"
+    CLAUDE_GENERAL = "claude_general"
 
     # HackerRank
     HR_CHAKRA = "hackerrank_chakra"
@@ -39,6 +40,7 @@ class ProductArea(str, Enum):
     HR_SETTINGS = "hackerrank_settings"
     HR_SKILLUP = "hackerrank_skillup"
     HR_UNCATEGORIZED = "hackerrank_uncategorized"
+    HR_GENERAL = "hackerrank_general"
 
     # Visa
     VISA_SUPPORT = "visa_support"
@@ -67,7 +69,6 @@ class Company(str, Enum):
     NONE = "none"
 
 
-# ---- Intermediate model: what the classifier LLM call returns ----
 class ClassificationResult(BaseModel):
     company: Company = Field(description="Which product ecosystem this ticket belongs to")
     product_area: ProductArea = Field(description="Most specific matching category")
@@ -80,7 +81,6 @@ class ClassificationResult(BaseModel):
     reasoning: str = Field(description="Brief internal reasoning for the classification")
 
 
-# ---- Final row output: what gets written to output.csv ----
 class TicketAnalysis(BaseModel):
     status: Status
     product_area: ProductArea
