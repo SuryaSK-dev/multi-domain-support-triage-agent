@@ -64,24 +64,6 @@ graph TB
 
 ## Architecture
 
-### Project Structure
-\`\`\`
-multi-domain-support-triage-agent/
-├── code/
-│   ├── retriever.py          # BM25 search over the support corpus
-│   ├── schemas.py            # Pydantic models: product_area, request_type, status
-│   ├── risk_rules.py         # Deterministic regex-based risk detection
-│   ├── classifier.py         # Gemini structured-output classification
-│   ├── router.py             # Grounding-driven reply/escalate decision
-│   ├── responder.py          # Grounded response generation
-│   ├── cache.py              # Disk cache to avoid redundant LLM calls
-│   ├── rate_limiter.py       # Client-side throttling for API rate limits
-│   └── main.py                # CLI entrypoint
-├── data/                      # Local support corpus (HackerRank, Claude, Visa)
-├── support_tickets/           # Input/output CSVs
-├── docs/                      # Progress tracking, architecture notes
-└── README.md
-\`\`\`
 
 ### Core Components
 
