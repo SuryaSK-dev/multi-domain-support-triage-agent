@@ -33,3 +33,5 @@ data/index/
 data/embeddings/
 *.sqlite
 *.db
+
+code/.llm_cache/
