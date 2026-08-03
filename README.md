@@ -1,134 +1,160 @@
-# HackerRank Orchestrate
+<div align="center">
 
-Starter repository for the **HackerRank Orchestrate** 24-hour hackathon (May 1–2, 2026).
+# Multi-Domain Support Triage Agent
 
-Build a terminal-based AI agent that triages real support tickets across three product ecosystems; **HackerRank**, **Claude**, and **Visa** — using only the support corpus shipped in this repo.
+**An AI agent that knows when *not* to answer.**
 
-Read [`problem_statement.md`](./problem_statement.md) for the full task spec, input/output schema, and allowed values, and [`evalutation_criteria.md`](./evalutation_criteria.md) for how submissions are scored.
+![Python](https://img.shields.io/badge/python-3.13-blue)
+![Gemini](https://img.shields.io/badge/LLM-Gemini%20Flash-orange)
+![BM25](https://img.shields.io/badge/retrieval-BM25-green)
+![Status](https://img.shields.io/badge/status-complete-brightgreen)
 
----
+</div>
 
-## Contents
-
-1. [Repository layout](#repository-layout)
-2. [What you need to build](#what-you-need-to-build)
-3. [Where your code goes](#where-your-code-goes)
-4. [Quickstart](#quickstart)
-5. [Chat transcript logging](#chat-transcript-logging)
-6. [Submission](#submission)
-7. [Judge interview](#judge-interview)
-8. [Evaluation criteria](#evaluation-criteria)
+A terminal-based support triage agent that classifies, grounds, and routes real customer
+support tickets across three unrelated product ecosystems — **HackerRank**, **Claude**,
+and **Visa** — using retrieval-augmented generation and deterministic escalation logic,
+built to never hallucinate a policy it can't back up with real documentation.
 
 ---
 
-## Repository layout
+## The Challenge
 
+**Support automation is dangerous when it's overconfident.**
+
+| | The Problem | Why It Matters | This Agent's Answer |
+|---|---|---|---|
+| **Hallucinated policy** | LLMs answering from general knowledge eventually invent a refund policy, deadline, or process step that doesn't exist | A wrong answer about billing or fraud has real consequences for the user | Every reply is grounded strictly in retrieved corpus excerpts — if it's not documented, the agent says so |
+| **Overconfident automation** | Most support bots try to answer everything, escalating only on explicit trigger words | Nuanced cases get mishandled either way — over-triggering or missing genuine risk | A dedicated router combines deterministic risk rules with LLM classification |
+| **Cross-domain ambiguity** | Real tickets don't announce which product they're about; some are irrelevant or adversarial | A single classifier either over-triggers or misses real risk | Company inference + BM25 retrieval scoped per-ecosystem, with explicit handling for out-of-scope and prompt-injection content |
+
+---
+
+## Overview
+
+```mermaid
+graph TB
+    subgraph "Ingestion"
+        A1[Support Ticket] --> A2[Risk Rules - Regex]
+        A1 --> A3[Classifier - Gemini]
+    end
+
+    subgraph "Decision"
+        A2 --> B1[Router]
+        A3 --> B1
+        B1 --> B2{Grounded in corpus?}
+    end
+
+    subgraph "Output"
+        B2 -->|Yes| C1[Responder - Grounded Reply]
+        B2 -->|No / High Risk| C2[Escalation Handoff]
+    end
+
+    subgraph "Knowledge Base"
+        D1[HackerRank Docs]
+        D2[Claude Docs]
+        D3[Visa Docs]
+        D1 --> D4[BM25 Retriever]
+        D2 --> D4
+        D3 --> D4
+        D4 --> A3
+        D4 --> C1
+    end
 ```
-.
-├── AGENTS.md                       # Rules for AI coding tools + transcript logging
-├── problem_statement.md            # Full task description and I/O schema
-├── README.md                       # You are here
-├── code/                           # ← Build your agent here
-│   └── main.py                     #   Entry point (rename/extend as you like)
-├── data/                           # Local-only support corpus (no network needed)
-│   ├── hackerrank/                 #   HackerRank help center
-│   ├── claude/                     #   Claude Help Center export
-│   └── visa/                       #   Visa consumer + small-business support
-└── support_tickets/
-    ├── sample_support_tickets.csv  # Inputs + expected outputs (for development)
-    ├── support_tickets.csv         # Inputs only (run your agent on these)
-    └── output.csv                  # Write your agent's predictions here
-```
 
----
+## Architecture
 
-## What you need to build
+### Project Structure
+multi-domain-support-triage-agent/
+├── code/
+│ ├── retriever.py # BM25 search over the support corpus
+│ ├── schemas.py # Pydantic models: product_area, request_type, status
+│ ├── risk_rules.py # Deterministic regex-based risk detection
+│ ├── classifier.py # Gemini structured-output classification
+│ ├── router.py # Grounding-driven reply/escalate decision
+│ ├── responder.py # Grounded response generation
+│ ├── cache.py # Disk cache to avoid redundant LLM calls
+│ ├── rate_limiter.py # Client-side throttling for API rate limits
+│ └── main.py # CLI entrypoint
+├── data/ # Local support corpus (HackerRank, Claude, Visa)
+├── support_tickets/ # Input/output CSVs
+├── docs/ # Progress tracking, architecture notes
+└── README.md
 
-A terminal-based agent that, for each row in `support_tickets/support_tickets.csv`, produces:
+### Core Components
 
-| Column         | Allowed values                                          |
-| -------------- | ------------------------------------------------------- |
-| `status`       | `replied`, `escalated`                                  |
-| `product_area` | most relevant support category / domain area            |
-| `response`     | user-facing answer grounded in the provided corpus      |
-| `justification`| concise explanation of the routing/answering decision   |
-| `request_type` | `product_issue`, `feature_request`, `bug`, `invalid`    |
+| Module | Responsibility |
+|---|---|
+| `retriever.py` | BM25 search over ~4,800 markdown support articles, chunked by header, with frontmatter-derived source URLs for citation |
+| `schemas.py` | Pydantic models enforcing a fixed `product_area` taxonomy derived directly from the corpus's own folder structure |
+| `risk_rules.py` | Regex-based detection of fraud, PII, self-harm, assessment integrity, and prompt-injection attempts — kept separate from the LLM so triggers stay auditable |
+| `classifier.py` | Gemini structured-output call for request type, product area, and risk signals; treats ticket text strictly as data |
+| `router.py` | The core decision layer — grounding-driven escalation, not blanket risk-category escalation |
+| `responder.py` | Generates the final reply strictly from retrieved excerpts, or a templated handoff for escalated tickets |
+| `cache.py` | Disk-based caching keyed on ticket content, so re-runs never redundantly hit the LLM API |
+| `rate_limiter.py` | Client-side call pacing to stay within free-tier rate limits without manual intervention |
 
-Hard requirements (from `problem_statement.md`):
+## Features
 
-- Must be **terminal-based**.
-- Must use **only the provided support corpus** (no live web calls for ground-truth answers).
-- Must **escalate** high-risk, sensitive, or unsupported cases instead of guessing.
-- Must avoid hallucinated policies or unsupported claims.
+### Core Triage Capabilities
+- BM25 retrieval with query-term-overlap confidence scoring, tuned against a real noise floor rather than raw score alone
+- Structured LLM classification into `product_area`, `request_type`, and `risk_flags`
+- Deterministic risk gate — every hard escalation traces to an explicit, testable regex or flag, not an opaque model judgment
+- Grounding-driven escalation — replies when the corpus can back an answer, escalates when it can't, rather than escalating by risk category alone
 
-Beyond that you are free to bring your own approach — RAG, vector DBs, tool use, structured output, agent frameworks, classical ML, or anything else.
+### Reliability Engineering
+- Disk caching — a re-run never re-processes an already-classified or already-answered ticket
+- Client-side rate throttling with automatic retry-with-backoff — runs reliably against free-tier API limits without manual pacing
+- Graceful degradation — a single failed ticket escalates safely with a clear error trail rather than crashing the batch
 
----
+### Cross-Domain Handling
+- Company inference for ambiguous or unlabeled tickets
+- Out-of-scope detection with a distinct low-stakes-reply vs. escalate path, driven by urgency signals rather than keyword-only matching
+- Prompt-injection resistance — ticket text is treated strictly as data, never as instructions, at both the classification and generation stages
 
-## Where your code goes
+## Why These Design Choices
 
-All of your work belongs in [`code/`](./code/). The repo ships with an empty `code/main.py` you can grow into your full agent — add more modules (`agent.py`, `retriever.py`, `classifier.py`, etc.) next to it as needed.
+**BM25 over embeddings.** The corpus is small and keyword-consistent — support articles use predictable terminology. BM25 is fully deterministic and reproducible, which matters for an auditable triage system, without the setup and drift cost embeddings would add for marginal benefit here.
 
-Conventions:
+**Escalation as a separate deterministic layer.** An LLM's risk judgment can vary between runs. Splitting regex-based hard rules from LLM classification from the final routing decision means every escalation traces back to an explicit, testable condition rather than a single opaque model call.
 
-- Put a **README inside `code/`** describing how to install dependencies and run your agent.
-- Read secrets **from environment variables only** (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, …). Copy `.env.example` → `.env` (already gitignored) if you keep one. **Never hardcode keys.**
-- Be **deterministic** where possible. Seed any random sampling.
-- Write responses to `support_tickets/output.csv`.
+**Grounding-driven, not category-driven, escalation.** The initial design escalated by risk category alone — fraud detected, escalate, no exceptions. Testing against ground-truth examples showed this was wrong: Visa's corpus has real documented steps for "my card was stolen," and escalating those wastes the exact information the user needs immediately. The system now escalates based on whether the corpus can actually ground a safe answer, reserving unconditional escalation for a narrow set of cases no article could ever resolve — self-harm, prompt injection, and disputed assessment-integrity findings.
 
----
+## Known Limitations
 
-## Quickstart
+- BM25 can over-match on incidental terms — Visa's contact directory lists country names, which can inflate relevance scores for unrelated queries. Mitigated via query-term-overlap weighting rather than raw score alone.
+- Visa's corpus is comparatively thin (largely contact directories rather than policy documentation), so many substantive Visa tickets are expected to escalate — a corpus limitation, not an agent failure.
+- Free-tier LLM rate limits required client-side throttling and disk caching to run reliably across a full ticket batch.
 
-Clone this repository:
+## Installation & Setup
 
 ```bash
-git clone git@github.com:interviewstreet/hackerrank-orchestrate-may26.git
-cd hackerrank-orchestrate-may26
+git clone https://github.com/SuryaSK-dev/multi-domain-support-triage-agent.git
+cd multi-domain-support-triage-agent
+python -m venv venv
+source venv/Scripts/activate   # Windows Git Bash
+pip install -r code/requirements.txt
+cp .env.example .env           # add your GEMINI_API_KEY
 ```
 
-You are free to use any language or runtime. We recommend **Python**, **JavaScript**, or **TypeScript**.
+### Running It
+
+```bash
+python -m code.main --input support_tickets/support_tickets.csv --output support_tickets/output.csv
+```
+
+Add `--limit N` to test against a smaller slice first.
+
+## Results
+
+Validated against `sample_support_tickets.csv` ground truth: **10/10 correct** on `status` and `request_type` after iterating the router's grounding-driven escalation logic.
+
+Full run against `support_tickets.csv` (29 tickets): *— results pending final run —*
 
 ---
 
-## Chat transcript logging
+<div align="center">
 
-This repo ships with an `AGENTS.md` that any modern AI coding tool (Cursor, Claude Code, Codex, Gemini CLI, Copilot, etc.) will read. It instructs the tool to append every conversation turn to a single shared log file:
+Built for the HackerRank Orchestrate Multi-Domain Support Triage Challenge
 
-| Platform       | Path                                              |
-| -------------- | ------------------------------------------------- |
-| macOS / Linux  | `$HOME/hackerrank_orchestrate/log.txt`            |
-| Windows        | `%USERPROFILE%\hackerrank_orchestrate\log.txt`    |
-
-You don't need to do anything to enable it — just use your AI tool normally. You'll upload this `log.txt` as your chat transcript at submission time.
-
----
-
-## Submission
-
-Submit on the HackerRank Community Platform:
-<https://www.hackerrank.com/contests/hackerrank-orchestrate-may26/challenges/support-agent/submission>
-
-You will upload **three** files:
-
-1. **Code zip** — zip your `code/` directory and upload it. Exclude virtualenvs, `node_modules`, build artifacts, the `data/` corpus, and the `support_tickets/` CSVs.
-2. **Predictions CSV** — your agent's output for `support_tickets/support_tickets.csv` (i.e. the populated `output.csv`).
-3. **Chat transcript** — the `log.txt` from the path in [Chat transcript logging](#chat-transcript-logging).
-
----
-
-## Judge interview
-
-After a successful submission, your AI Judge interview will happen within a few hours after the hackathon ends. It will stay open for the next 4 hours. 
-
-The AI Judge will have access to your submission and may ask about your approach, decisions, and how you used AI while building your solution. The interview will be 30 minutes long, and keeping your camera on is mandatory.
-
-Results will be announced on May 15, 2026
-
----
-
-## Evaluation criteria
-
-Submissions are scored across four dimensions: agent design (your `code/`), the AI Judge interview, output accuracy on `support_tickets/output.csv`, and AI fluency from your chat transcript.
-
-See [`evalutation_criteria.md`](./evalutation_criteria.md) for the full rubric.
+</div>
