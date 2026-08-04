@@ -14,7 +14,6 @@ __pycache__/
 .env.local
 data/
 code/.retriever_cache.pkl
-support_tickets/output.csv
 *.log
 
 # build
