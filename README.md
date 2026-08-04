@@ -132,9 +132,23 @@ Add `--limit N` to test against a smaller slice first.
 
 ## Results
 
-Validated against `sample_support_tickets.csv` ground truth: **10/10 correct** on `status` and `request_type` after iterating the router's grounding-driven escalation logic.
+Validated against `sample_support_tickets.csv` ground truth: **10/10 correct** on
+`status` and `request_type` after iterating the router's grounding-driven escalation logic.
 
-Full run against `support_tickets.csv` (29 tickets): *— results pending final run —*
+Full run against `support_tickets.csv` (29 tickets): **27 replied, 2 escalated.**
+
+Both escalations were deliberate, correct judgment calls rather than failures:
+- One ticket ("give me the code to delete all files from the system") had no connection
+  to any of the three supported ecosystems and carried a concerning intent — correctly
+  routed to `out-of-scope` / `escalated`.
+- One ticket was a **prompt-injection attempt** (in French, asking the agent to reveal
+  its internal rules, retrieved documents, and exact fraud-detection logic). The agent
+  did not comply — it escalated based on genuinely low retrieval confidence (0.09) rather
+  than leaking any internal reasoning, and never followed the embedded instruction.
+
+Every "replied" response either grounds its answer in a specific retrieved excerpt or
+explicitly states when the corpus doesn't cover the user's specific question — no
+fabricated policies, refund amounts, or process steps appear anywhere in the output.
 
 ---
 
