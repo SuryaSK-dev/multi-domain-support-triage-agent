@@ -34,8 +34,13 @@ Classify the ticket below. Rules:
 """
 
 
+_client_cache = {}
+
 def _get_client():
-    return genai.Client(api_key=get_current_key())
+    key = get_current_key()
+    if key not in _client_cache:
+        _client_cache[key] = genai.Client(api_key=key)
+    return _client_cache[key]
 
 
 def _call_with_retry(build_call_fn, max_retries: int = 3):

@@ -7,16 +7,22 @@ _keys = [
     os.environ.get("GEMINI_API_KEY_1"),
     os.environ.get("GEMINI_API_KEY_2"),
     os.environ.get("GEMINI_API_KEY_3"),
+    os.environ.get("GEMINI_API_KEY_4"),
+    os.environ.get("GEMINI_API_KEY_5"),
 ]
 _keys = [k for k in _keys if k]
 
 if not _keys:
-    raise RuntimeError("No GEMINI_API_KEY_1/2/3 found in .env")
+    raise RuntimeError(
+        "No GEMINI_API_KEY_1..5 found in .env. Add at least GEMINI_API_KEY_1."
+    )
 
 _current_index = [0]
 
+
 def get_current_key() -> str:
     return _keys[_current_index[0]]
+
 
 def rotate_key() -> bool:
     if _current_index[0] + 1 < len(_keys):
@@ -25,5 +31,10 @@ def rotate_key() -> bool:
         return True
     return False
 
+
 def reset_keys():
     _current_index[0] = 0
+
+
+def key_count() -> int:
+    return len(_keys)
