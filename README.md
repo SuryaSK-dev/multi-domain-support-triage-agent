@@ -157,6 +157,13 @@ multi-domain-support-triage-agent/
 - BM25 can over-match on incidental terms — Visa's contact directory lists country names, which can inflate relevance scores for unrelated queries. Mitigated via query-term-overlap weighting rather than raw score alone.
 - Visa's corpus is comparatively thin (largely contact directories rather than policy documentation), so many substantive Visa tickets are expected to escalate — a corpus limitation, not an agent failure.
 - Free-tier LLM daily quotas (20 requests/day/project on the model used here) required client-side throttling, disk caching, and multi-key rotation to complete a 29-ticket batch reliably.
+- Adversarial pattern coverage is regex-based and English-only by design (see
+  `src/tests/test_adversarial.py`). The initial pattern set missed several
+  real injection styles (authority-claim framing, fake closing-tag delimiters,
+  "disregard guidelines" phrasing) — caught by the adversarial test suite and
+  patched. Regex coverage will always lag novel phrasing; the LLM classifier's
+  confidence-based fallback in `router.py` is the compensating layer for
+  patterns not yet enumerated.
 
 ---
 

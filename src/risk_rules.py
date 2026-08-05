@@ -32,9 +32,17 @@ RISK_PATTERNS: dict[str, list[str]] = {
         r"\bhurt myself\b", r"\bwant to die\b",
     ],
     "adversarial_content": [
-        r"\bignore (previous|all) instructions\b", r"\bsystem prompt\b",
-        r"\byou are now\b", r"\bact as\b.*\b(dan|jailbreak)\b",
+        r"\bignore (previous|all|any) instructions\b",
+        r"\bdisregard (your |the )?(guidelines|instructions|rules|policy|policies)\b",
+        r"\bsystem prompt\b",
+        r"\byou are now\b",
+        r"\bact as\b.*\b(dan|jailbreak)\b",
         r"\bpretend (you|to) (are|be)\b",
+        r"\bnew system instruction\b",
+        r"\bsystem\s*:\s*override\b",
+        r"\bas the (system )?(administrator|admin)\b.*\b(authoriz|override|skip)\w*\b",
+        r"\bi am authorizing you\b",
+        r"</\w+>\s*(new\s+)?system\b",  # fake closing-tag delimiter injection
     ],
 }
 
