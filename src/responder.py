@@ -10,6 +10,7 @@ from src.schemas import Status, ClassificationResult
 from src.cache import cache_get, cache_set
 from src.rate_limiter import throttle
 from src.key_manager import get_current_key, rotate_key
+from src.metrics import timed_call
 
 load_dotenv()
 
@@ -100,6 +101,8 @@ def generate_response(
 
     cached = cache_get("respond", issue_text, company or "none")
     if cached:
+        with timed_call("respond", cache_hit=True):
+            pass
         return cached
 
     results = retriever.search(issue_text, company=company, k=4)
@@ -112,15 +115,20 @@ def generate_response(
     )
     prompt = f"User's issue: {issue_text}\n\nRelevant support excerpts:\n{excerpts}"
 
-    throttle()
-    response = _call_with_retry(lambda: _get_client().models.generate_content(
-        model="gemini-flash-latest",
-        contents=prompt,
-        config=types.GenerateContentConfig(
-            system_instruction=RESPONSE_SYSTEM_INSTRUCTION,
-            temperature=0,
-        ),
-    ))
+    with timed_call("respond") as m:
+        throttle()
+        response = _call_with_retry(lambda: _get_client().models.generate_content(
+            model="gemini-flash-latest",
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                system_instruction=RESPONSE_SYSTEM_INSTRUCTION,
+                temperature=0,
+            ),
+        ))
+        if hasattr(response, "usage_metadata") and response.usage_metadata:
+            m.input_tokens = response.usage_metadata.prompt_token_count or 0
+            m.output_tokens = response.usage_metadata.candidates_token_count or 0
+
     result_text = response.text.strip()
     cache_set("respond", issue_text, company or "none", value=result_text)
     return result_text

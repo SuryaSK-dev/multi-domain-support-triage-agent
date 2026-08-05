@@ -5,6 +5,7 @@ from google.genai import types
 from dotenv import load_dotenv
 
 from src.schemas import ClassificationResult
+from src.metrics import timed_call
 from src.cache import cache_get, cache_set
 from src.rate_limiter import throttle
 from src.key_manager import get_current_key, rotate_key
@@ -65,21 +66,31 @@ def _call_with_retry(build_call_fn, max_retries: int = 3):
 def classify_ticket(issue: str, subject: str, company: str) -> ClassificationResult:
     cached = cache_get("classify", issue, subject, company)
     if cached:
+        with timed_call("classify", cache_hit=True):
+            pass
         return ClassificationResult.model_validate(cached)
 
     prompt = f"Company (as given): {company}\nSubject: {subject}\nIssue: {issue}"
 
-    throttle()
-    response = _call_with_retry(lambda: _get_client().models.generate_content(
-        model="gemini-flash-latest",
-        contents=prompt,
-        config=types.GenerateContentConfig(
-            system_instruction=SYSTEM_INSTRUCTION,
-            response_mime_type="application/json",
-            response_schema=ClassificationResult,
-            temperature=0,
-        ),
-    ))
+
+    
+
+    with timed_call("classify") as m:
+        throttle()
+        response = _call_with_retry(lambda: _get_client().models.generate_content(
+            model="gemini-flash-latest",
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                system_instruction=SYSTEM_INSTRUCTION,
+                response_mime_type="application/json",
+                response_schema=ClassificationResult,
+                temperature=0,
+            ),
+        ))
+        if hasattr(response, "usage_metadata") and response.usage_metadata:
+            m.input_tokens = response.usage_metadata.prompt_token_count or 0
+            m.output_tokens = response.usage_metadata.candidates_token_count or 0
+
     result = ClassificationResult.model_validate_json(response.text)
     cache_set("classify", issue, subject, company, value=result.model_dump(mode="json"))
     return result

@@ -200,6 +200,23 @@ python -m src.evaluate --predictions support_tickets/sample_output_full.csv --gr
 
 ---
 
+## Cost & Latency
+
+Instrumented via `src/metrics.py` — every LLM call logs duration, token usage, and
+estimated cost to `metrics.jsonl`; transient failures (e.g. upstream `503`s) are
+captured as errors rather than silently lost.
+
+| Metric | Observed |
+|---|---|
+| Avg. estimated cost per ticket | ~$0.0001 (2 calls: classify + respond) |
+| Avg. latency per live call | ~21s *(dominated by free-tier rate-limit throttling, not model inference time)* |
+| Cache hit rate | Increases with re-runs — cached calls cost $0 and add ~0ms |
+| Error handling | Transient upstream errors (e.g. `503 UNAVAILABLE`) are caught, logged, and the ticket safely escalates rather than crashing the batch |
+
+Run `python -m src.metrics` any time after a batch run for a live cost/latency summary.
+
+---
+
 ## Results
 
 Evaluated with `src/evaluate.py` against `sample_support_tickets.csv` ground truth:
