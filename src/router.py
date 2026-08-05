@@ -1,8 +1,8 @@
 from dataclasses import dataclass
 
-from code.schemas import ClassificationResult, Status
-from code.risk_rules import should_force_escalate, is_urgent_outage
-from code.retriever import Retriever
+from src.schemas import ClassificationResult, Status
+from src.risk_rules import should_force_escalate, is_urgent_outage
+from src.retriever import Retriever
 
 CONFIDENCE_ESCALATE_THRESHOLD = 0.3
 

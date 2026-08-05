@@ -2,11 +2,11 @@ import time
 from google import genai
 from google.genai import types
 
-from code.schemas import CombinedResult
-from code.cache import cache_get, cache_set
-from code.rate_limiter import throttle
-from code.key_manager import get_current_key, rotate_key
-from code.retriever import Retriever
+from src.schemas import CombinedResult
+from src.cache import cache_get, cache_set
+from src.rate_limiter import throttle
+from src.key_manager import get_current_key, rotate_key
+from src.retriever import Retriever
 
 COMBINED_SYSTEM_INSTRUCTION = """You are a support ticket classifier AND response writer
 for three companies: HackerRank, Claude, and Visa.

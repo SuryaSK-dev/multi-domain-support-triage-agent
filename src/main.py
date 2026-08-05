@@ -4,10 +4,10 @@ import sys
 import time
 from pathlib import Path
 
-from code.classifier import classify_ticket
-from code.retriever import Retriever
-from code.router import route
-from code.responder import generate_response
+from src.classifier import classify_ticket
+from src.retriever import Retriever
+from src.router import route
+from src.responder import generate_response
 
 # Maps flexible input header variants -> the field name we use internally
 HEADER_ALIASES = {

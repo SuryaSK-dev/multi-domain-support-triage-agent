@@ -40,7 +40,7 @@ RISK_PATTERNS: dict[str, list[str]] = {
 
 URGENCY_PATTERNS = [
     r"\bsite is down\b", r"\bcompletely (down|broken|inaccessible)\b",
-    r"\bnone of.*(work|accessible|loading)\b", r"\bentire (system|platform|site) down\b",
+    r"\bnone of.*(work|accessible|loading)\b", r"\bentire (system|platform|site) (is |has been )?down\b",
     r"\ball (pages|features) (down|broken|inaccessible)\b",
     r"\burgent\b.*\b(down|broken|not working)\b",
 ]
