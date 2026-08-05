@@ -7,8 +7,9 @@
 ![Python](https://img.shields.io/badge/python-3.13-blue)
 ![Gemini](https://img.shields.io/badge/LLM-Gemini%20Flash-orange)
 ![BM25](https://img.shields.io/badge/retrieval-BM25-green)
-![Tests](https://img.shields.io/badge/tests-passing-brightgreen)
+![Tests](https://github.com/SuryaSK-dev/multi-domain-support-triage-agent/actions/workflows/tests.yml/badge.svg)
 ![License](https://img.shields.io/badge/license-MIT-lightgrey)
+
 
 </div>
 
