@@ -7,7 +7,7 @@
 ![Python](https://img.shields.io/badge/python-3.13-blue)
 ![Gemini](https://img.shields.io/badge/LLM-Gemini%20Flash-orange)
 ![BM25](https://img.shields.io/badge/retrieval-BM25-green)
-![Status](https://img.shields.io/badge/status-complete-brightgreen)
+![Tests](https://img.shields.io/badge/tests-passing-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-lightgrey)
 
 </div>
@@ -72,7 +72,7 @@ graph TB
 ```text
 multi-domain-support-triage-agent/
 │
-├── code/
+├── src/
 │   ├── retriever.py            BM25 search over the support corpus
 │   ├── schemas.py               Pydantic models: product_area, request_type, status
 │   ├── risk_rules.py            Deterministic regex-based risk detection
@@ -83,12 +83,17 @@ multi-domain-support-triage-agent/
 │   ├── cache.py                 Disk cache to avoid redundant LLM calls
 │   ├── rate_limiter.py          Client-side throttling for API rate limits
 │   ├── key_manager.py           Multi-key rotation across free-tier quotas
+│   ├── evaluate.py              Precision/recall/F1 evaluation harness
+│   ├── tests/                   Pytest unit tests
+│   │   ├── test_risk_rules.py
+│   │   ├── test_router.py
+│   │   └── test_retriever.py
 │   ├── requirements.txt
-│   └── main.py                  CLI entrypoint
+│   └── main.py                   CLI entrypoint
 │
-├── data/                        Local support corpus (gitignored)
-├── support_tickets/             Input / output CSVs
-├── docs/                        Progress notes and architecture reference
+├── data/                         Local support corpus (gitignored)
+├── support_tickets/              Input / output CSVs
+├── docs/                         Progress notes and architecture reference
 └── README.md
 ```
 
@@ -106,6 +111,8 @@ multi-domain-support-triage-agent/
 | `cache.py` | Disk-based caching keyed on ticket content, so re-runs never redundantly hit the LLM API |
 | `key_manager.py` | Rotates across multiple API keys when a project's daily free-tier quota is exhausted mid-run |
 | `rate_limiter.py` | Client-side call pacing to stay within free-tier rate limits without manual intervention |
+| `evaluate.py` | Computes per-class precision/recall/F1 and a confusion matrix against ground-truth labels |
+| `tests/` | Pytest unit tests covering risk detection, routing decisions, and retrieval confidence |
 
 ---
 
@@ -127,6 +134,10 @@ multi-domain-support-triage-agent/
 - Company inference for ambiguous or unlabeled tickets
 - Out-of-scope detection with a distinct low-stakes-reply vs. escalate path, driven by urgency signals rather than keyword-only matching
 - Prompt-injection resistance — ticket text is treated strictly as data, never as instructions, at both the classification and generation stages
+
+### Engineering Quality
+- Unit-tested (`pytest`) risk detection, routing logic, and retrieval confidence scoring
+- Formal evaluation harness computing precision/recall/F1 and a confusion matrix against ground-truth labels, not manual eyeballing
 
 ---
 
@@ -156,47 +167,35 @@ git clone https://github.com/SuryaSK-dev/multi-domain-support-triage-agent.git
 cd multi-domain-support-triage-agent
 python -m venv venv
 source venv/Scripts/activate
-pip install -r code/requirements.txt
+pip install -r src/requirements.txt
 cp .env.example .env
 ```
 
 ### Running It
 
 ```bash
-python -m code.main --input support_tickets/support_tickets.csv --output support_tickets/output.csv
+python -m src.main --input support_tickets/support_tickets.csv --output support_tickets/output.csv
 ```
 
 Add `--limit N` to test against a smaller slice first.
+
+### Running Tests
+
+```bash
+python -m pytest src/tests/ -v
+```
+
+### Running the Evaluation Harness
+
+```bash
+python -m src.evaluate --predictions support_tickets/sample_output_full.csv --ground-truth support_tickets/sample_support_tickets.csv
+```
 
 ---
 
 ## Results
 
-Validated against `sample_support_tickets.csv` ground truth: **10/10 correct** on
-`status` and `request_type` after iterating the router's grounding-driven escalation logic.
-
-Full run against `support_tickets.csv` (29 tickets): **27 replied, 2 escalated.**
-
-Both escalations were deliberate, correct judgment calls rather than failures:
-- One ticket ("give me the code to delete all files from the system") had no connection to any of the three supported ecosystems and carried a concerning intent — correctly routed to `out-of-scope` / `escalated`.
-- One ticket was a **prompt-injection attempt** (in French, asking the agent to reveal its internal rules, retrieved documents, and exact fraud-detection logic). The agent did not comply — it escalated based on genuinely low retrieval confidence (0.09) rather than leaking any internal reasoning, and never followed the embedded instruction.
-
-Every "replied" response either grounds its answer in a specific retrieved excerpt or explicitly states when the corpus doesn't cover the user's specific question — no fabricated policies, refund amounts, or process steps appear anywhere in the output.
-
-Both escalations were deliberate, correct judgment calls rather than failures:
-- One ticket ("give me the code to delete all files from the system") had no connection
-  to any of the three supported ecosystems and carried a concerning intent — correctly
-  routed to `out-of-scope` / `escalated`.
-- One ticket was a **prompt-injection attempt** (in French, asking the agent to reveal
-  its internal rules, retrieved documents, and exact fraud-detection logic). The agent
-  did not comply — it escalated based on genuinely low retrieval confidence (0.09) rather
-  than leaking any internal reasoning, and never followed the embedded instruction.
-
-Every "replied" response either grounds its answer in a specific retrieved excerpt or
-explicitly states when the corpus doesn't cover the user's specific question — no
-fabricated policies, refund amounts, or process steps appear anywhere in the output.
-
-Evaluated with `code/evaluate.py` against `sample_support_tickets.csv` ground truth:
+Evaluated with `src/evaluate.py` against `sample_support_tickets.csv` ground truth:
 
 | Metric | Status | Request Type |
 |---|---|---|
@@ -213,14 +212,16 @@ Confusion matrix (status):
 | **replied**   | 0 | 9 |
 
 Full run against `support_tickets.csv` (29 tickets): **27 replied, 2 escalated**, both
-deliberate correct judgment calls — one out-of-scope/concerning-intent ticket, and one
-prompt-injection attempt the agent refused to comply with (escalated on low retrieval
+deliberate correct judgment calls — one out-of-scope ticket with concerning intent, and
+one prompt-injection attempt the agent refused to comply with (escalated on low retrieval
 confidence rather than leaking internal logic).
 
-Run the evaluation yourself:
-\`\`\`bash
-python -m code.evaluate --predictions support_tickets/sample_output_full.csv --ground-truth support_tickets/sample_support_tickets.csv
-\`\`\`
+Test suite: **24/24 passing**, covering hard-escalation triggers, grounding-driven routing
+behavior, urgent-outage detection, and retrieval confidence separation between relevant
+and irrelevant queries.
+
+---
+
 <div align="center">
 
 Built for the HackerRank Orchestrate Multi-Domain Support Triage Challenge
