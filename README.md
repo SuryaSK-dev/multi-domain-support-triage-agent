@@ -196,6 +196,31 @@ Every "replied" response either grounds its answer in a specific retrieved excer
 explicitly states when the corpus doesn't cover the user's specific question — no
 fabricated policies, refund amounts, or process steps appear anywhere in the output.
 
+Evaluated with `code/evaluate.py` against `sample_support_tickets.csv` ground truth:
+
+| Metric | Status | Request Type |
+|---|---|---|
+| Accuracy | 1.000 (10/10) | 1.000 (10/10) |
+| Precision (macro) | 1.000 | 1.000 |
+| Recall (macro) | 1.000 | 1.000 |
+| F1 (macro) | 1.000 | 1.000 |
+
+Confusion matrix (status):
+
+|              | escalated | replied |
+|---|---|---|
+| **escalated** | 1 | 0 |
+| **replied**   | 0 | 9 |
+
+Full run against `support_tickets.csv` (29 tickets): **27 replied, 2 escalated**, both
+deliberate correct judgment calls — one out-of-scope/concerning-intent ticket, and one
+prompt-injection attempt the agent refused to comply with (escalated on low retrieval
+confidence rather than leaking internal logic).
+
+Run the evaluation yourself:
+\`\`\`bash
+python -m code.evaluate --predictions support_tickets/sample_output_full.csv --ground-truth support_tickets/sample_support_tickets.csv
+\`\`\`
 <div align="center">
 
 Built for the HackerRank Orchestrate Multi-Domain Support Triage Challenge
