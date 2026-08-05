@@ -1,5 +1,13 @@
 import pytest
+from pathlib import Path
 from src.retriever import Retriever, tokenize
+
+DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data"
+
+pytestmark = pytest.mark.skipif(
+    not DATA_DIR.exists() or not any(DATA_DIR.iterdir()),
+    reason="Corpus data/ not present (excluded from git) — retriever tests need local corpus"
+)
 
 
 @pytest.fixture(scope="module")
