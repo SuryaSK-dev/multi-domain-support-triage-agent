@@ -216,6 +216,29 @@ captured as errors rather than silently lost.
 Run `python -m src.metrics` any time after a batch run for a live cost/latency summary.
 
 ---
+## API
+
+Beyond the CLI, the pipeline is also exposed as a REST API:
+
+```bash
+python -m uvicorn src.api:app --reload --port 8000
+```
+
+Interactive docs auto-generated at `http://127.0.0.1:8000/docs`.
+
+**POST /triage**
+```json
+{
+  "issue": "How do I delete my Claude account?",
+  "subject": "",
+  "company": "Claude"
+}
+```
+Returns `status`, `product_area`, `request_type`, `response`, and `justification`.
+
+**GET /health** — returns corpus load status and chunk count.
+
+---
 
 ## Results
 
